@@ -1,70 +1,29 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
+import Hero from "@/components/Hero";
+import Metrics from "@/components/Metrics";
+import Challenges from "@/components/Challenges";
+import Services from "@/components/Services";
+import Methodology from "@/components/Methodology";
+import CTA from "@/components/CTA";
+
 export default function HomePage() {
   return (
     <>
       <Navbar />
 
-      <main>
+      <Hero />
 
-        <section
-          className="
-          min-h-screen
-          bg-[#071B38]
-          text-white
-          flex
-          items-center
-        "
-        >
-          <div className="container">
+      <Metrics />
 
-            <div className="max-w-4xl">
+      <Challenges />
 
-              <div
-                className="
-                inline-flex
-                border
-                border-cyan-400/30
-                rounded-full
-                px-5
-                py-2
-              "
-              >
-                AI • DATA • INNOVATION • BUSINESS MODELING
-              </div>
+      <Services />
 
-              <h1
-                className="
-                text-6xl
-                md:text-8xl
-                font-bold
-                mt-8
-              "
-              >
-                Transform Ideas Into
-                Intelligent Growth.
-              </h1>
+      <Methodology />
 
-              <p
-                className="
-                mt-8
-                text-xl
-                text-slate-300
-                max-w-2xl
-              "
-              >
-                Helping organizations leverage AI,
-                data and innovation to create
-                sustainable competitive advantage.
-              </p>
-
-            </div>
-
-          </div>
-        </section>
-
-      </main>
+      <CTA />
 
       <Footer />
     </>
