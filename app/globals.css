@@ -1,10 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --navy: #0b1f4d;
-  --blue: #00aeef;
+  --navy: #071b38;
+  --cyan: #00aeef;
   --green: #00c389;
-  --light: #f7f9fc;
+  --light: #f8fafc;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 html {
@@ -14,4 +20,13 @@ html {
 body {
   background: white;
   color: #111827;
+  font-family: Inter, Arial, sans-serif;
+}
+
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
 }
