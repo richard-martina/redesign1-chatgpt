@@ -1,43 +1,33 @@
 export default function CTA() {
   return (
-    <section
-      className="
-      py-32
-      bg-[#0B1F4D]
-      text-white
-      relative
-      overflow-hidden
-    "
-    >
-      <div className="max-w-7xl mx-auto px-6">
+    <section className="py-32 bg-[#071B38] text-white">
 
-        <div className="max-w-3xl">
+      <div className="container">
 
-          <h2 className="text-6xl font-bold">
-            Ready to unlock your next innovation?
-          </h2>
+        <h2 className="text-6xl font-bold max-w-4xl">
+          Ready to unlock your next innovation?
+        </h2>
 
-          <p className="mt-6 text-xl text-slate-300">
-            Let's explore how AI, technology and business
-            innovation can create measurable value.
-          </p>
+        <p className="mt-8 text-xl text-slate-300">
+          Let's explore how AI and innovation
+          can create measurable business value.
+        </p>
 
-          <button
-            className="
-            mt-10
-            bg-[#00AEEF]
-            px-8
-            py-4
-            rounded-xl
-            text-lg
-          "
-          >
-            Schedule a Consultation
-          </button>
-
-        </div>
+        <button
+          className="
+          mt-10
+          bg-[#00AEEF]
+          px-8
+          py-4
+          rounded-xl
+          text-lg
+        "
+        >
+          Schedule Consultation
+        </button>
 
       </div>
+
     </section>
   );
 }
