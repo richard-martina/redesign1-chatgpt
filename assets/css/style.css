@@ -909,4 +909,94 @@ transition:.8s;
 left:100%;
 
 }
+
+  /* =====================================
+SMALL HERO
+===================================== */
+
+.small-hero {
+
+min-height:60vh;
+
+display:flex;
+align-items:center;
+
+padding-top:140px;
+
+}
+
+.small-hero h1 {
+
+font-size:4rem;
+
+max-width:800px;
+
+margin:20px 0;
+
+}
+
+.small-hero p {
+
+max-width:700px;
+
+font-size:1.2rem;
+
+color:var(--text-light);
+
+}
+
+/* =====================================
+SERVICES DETAIL
+===================================== */
+
+.services-detail {
+
+padding:120px 0;
+
+}
+
+.service-block {
+
+padding:60px;
+
+background:white;
+
+border-radius:28px;
+
+box-shadow:var(--shadow);
+
+margin-bottom:40px;
+
+}
+
+.service-copy h2 {
+
+font-size:2.4rem;
+
+margin-bottom:20px;
+
+color:var(--navy);
+
+}
+
+.service-copy p {
+
+max-width:850px;
+
+margin-bottom:25px;
+
+}
+
+.service-copy ul {
+
+display:grid;
+
+grid-template-columns:
+repeat(2,minmax(200px,1fr));
+
+gap:14px;
+
+padding-left:20px;
+
+}
 }
