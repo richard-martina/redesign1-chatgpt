@@ -999,4 +999,196 @@ gap:14px;
 padding-left:20px;
 
 }
+
+  /* =====================================
+TEAM PAGE
+===================================== */
+
+.profile-section {
+
+padding:120px 0;
+
+}
+
+.profile-section.alt {
+
+background:#f8fbff;
+
+}
+
+.profile-grid {
+
+display:grid;
+
+grid-template-columns:
+400px 1fr;
+
+gap:80px;
+
+align-items:center;
+
+}
+
+.profile-placeholder {
+
+height:500px;
+
+border-radius:30px;
+
+background:
+linear-gradient(
+135deg,
+#0b5fff,
+#4ba3ff
+);
+
+display:flex;
+
+align-items:center;
+justify-content:center;
+
+color:white;
+
+font-size:1.5rem;
+font-weight:700;
+
+}
+
+.profile-label {
+
+display:inline-block;
+
+padding:8px 14px;
+
+background:#eef5ff;
+
+color:#0b5fff;
+
+border-radius:999px;
+
+font-weight:700;
+
+margin-bottom:20px;
+
+}
+
+.profile-content h2 {
+
+font-size:3rem;
+
+margin-bottom:10px;
+
+color:var(--navy);
+
+}
+
+.profile-content h3 {
+
+font-size:1.3rem;
+
+color:var(--primary);
+
+margin-bottom:30px;
+
+}
+
+.profile-content p {
+
+margin-bottom:20px;
+
+max-width:850px;
+
+}
+
+.expertise-grid {
+
+margin-top:30px;
+
+display:grid;
+
+grid-template-columns:
+repeat(2,minmax(180px,1fr));
+
+gap:15px;
+
+}
+
+.expertise-grid div {
+
+padding:15px 20px;
+
+background:white;
+
+border:1px solid var(--border);
+
+border-radius:12px;
+
+font-weight:600;
+
+}
+
+.team-philosophy {
+
+padding:120px 0;
+
+}
+
+.philosophy-grid {
+
+display:grid;
+
+grid-template-columns:
+repeat(3,1fr);
+
+gap:30px;
+
+}
+
+.philosophy-card {
+
+padding:40px;
+
+background:white;
+
+border-radius:24px;
+
+box-shadow:var(--shadow);
+
+}
+
+.philosophy-card h3 {
+
+font-size:1.6rem;
+
+margin-bottom:20px;
+
+color:var(--navy);
+
+}
+
+/* Mobile */
+
+@media(max-width:992px){
+
+.profile-grid {
+
+grid-template-columns:1fr;
+
+gap:40px;
+
+}
+
+.philosophy-grid {
+
+grid-template-columns:1fr;
+
+}
+
+.profile-placeholder {
+
+height:350px;
+
+}
+
+}
 }
