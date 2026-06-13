@@ -785,4 +785,128 @@ padding:28px;
 
 }
 
+/* =====================================
+REVEAL ANIMATIONS
+===================================== */
+
+.hidden-card {
+
+opacity:0;
+
+transform:
+translateY(40px);
+
+transition:
+all .8s ease;
+
+}
+
+.revealed {
+
+opacity:1;
+
+transform:
+translateY(0);
+
+}
+
+.trust-reveal {
+
+opacity:0;
+
+transform:
+translateY(20px);
+
+animation:
+trustFade .8s forwards;
+
+}
+
+@keyframes trustFade {
+
+to {
+
+opacity:1;
+transform:translateY(0);
+
+}
+
+}
+
+.hero-copy h1 {
+
+opacity:0;
+
+transform:
+translateY(20px);
+
+transition:
+all 1s ease;
+
+}
+
+.hero-copy h1.loaded {
+
+opacity:1;
+
+transform:
+translateY(0);
+
+}
+
+/* hover glow */
+
+.service-card:hover {
+
+box-shadow:
+0 25px 60px rgba(11,95,255,.12);
+
+}
+
+.team-card:hover {
+
+box-shadow:
+0 25px 60px rgba(11,95,255,.12);
+
+}
+
+/* button glow */
+
+.btn-primary {
+
+position:relative;
+
+overflow:hidden;
+
+}
+
+.btn-primary::before {
+
+content:"";
+
+position:absolute;
+
+top:0;
+left:-100%;
+
+width:100%;
+height:100%;
+
+background:
+linear-gradient(
+90deg,
+transparent,
+rgba(255,255,255,.25),
+transparent
+);
+
+transition:.8s;
+
+}
+
+.btn-primary:hover::before {
+
+left:100%;
+
+}
 }
