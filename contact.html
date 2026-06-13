@@ -1,0 +1,623 @@
+"use client"
+
+import { useState, useEffect, useMemo } from "react";
+import { useAuth } from "@/components/auth-provider";
+import { useLanguage } from "@/components/language-provider";
+import { db } from "@/lib/firebase";
+import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, orderBy, where, limit } from "firebase/firestore";
+import type { Medication, MedicationLog, MedicationType } from "@/types";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlusCircle, Trash2, Pill, Clock, Loader2, Droplets, Syringe, Sparkles, Wind, CircleDot, Sprout, Wheat, Leaf, Trophy, Activity, Target, Zap, Check, CheckCircle2, ClipboardList, History, X, Flame } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { format, startOfDay, subDays, differenceInCalendarDays, eachDayOfInterval, isSameDay } from "date-fns";
+import { nl } from "date-fns/locale";
+import { Skeleton } from "@/components/ui/skeleton";
+import { errorEmitter } from "@/firebase/error-emitter";
+import { FirestorePermissionError } from "@/firebase/errors";
+import { cn, calculateStreak } from "@/lib/utils";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+const ResourceStatus = ({ logs, mounted }: { logs: MedicationLog[], mounted: boolean }) => {
+    const { t, metaphor } = useLanguage();
+    
+    const fertility = useMemo(() => {
+        if (!mounted || logs.length === 0) return 0;
+        const today = startOfDay(new Date());
+        const recentLogs = logs.filter(log => {
+            const date = log.effectiveDateTime instanceof Date ? log.effectiveDateTime : (log.effectiveDateTime?.toDate?.() || log.timestamp?.toDate?.() || new Date());
+            return differenceInCalendarDays(today, startOfDay(date)) < 7;
+        });
+        
+        return Math.min(100, (recentLogs.length / 7) * 100);
+    }, [logs, mounted]);
+
+    const streak = useMemo(() => calculateStreak(logs, logs[0]?.effectiveDateTime ? 'effectiveDateTime' : 'timestamp'), [logs]);
+
+    const isSoccer = metaphor === 'soccer';
+    const isNone = metaphor === 'none';
+    const numIcons = Math.floor(fertility / 20);
+
+    return (
+        <Card className={cn(
+            "col-span-full border-none shadow-2xl overflow-hidden relative group hover:scale-[1.01] transition-all",
+            isSoccer 
+                ? "bg-gradient-to-br from-slate-900 to-blue-900 text-white" 
+                : (isNone 
+                    ? "bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-950 text-foreground"
+                    : "bg-gradient-to-br from-[#5d4037] to-[#3e2723] text-white")
+        )}>
+            <div className={cn(
+                "absolute inset-0 opacity-20 pointer-events-none",
+                isSoccer 
+                    ? "bg-[url('https://www.transparenttextures.com/patterns/pinstriped-suit.png')]" 
+                    : (isNone 
+                        ? "bg-none"
+                        : "bg-[url('https://www.transparenttextures.com/patterns/natural-paper.png')]")
+            )} />
+            <CardContent className="p-8 relative z-10 flex flex-col md:flex-row items-center gap-8">
+                <div className="flex-1 space-y-4 w-full">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className={cn(
+                                "p-3 rounded-2xl border",
+                                isNone ? "bg-primary/10 border-primary/20" : "bg-white/10 border-white/20"
+                            )}>
+                                {isSoccer ? <Activity className="h-8 w-8 text-sky-400" /> : (isNone ? <Activity className="h-8 w-8 text-primary" /> : <Sprout className="h-8 w-8 text-emerald-400" />)}
+                            </div>
+                            <div>
+                                <h3 className="text-3xl font-black font-headline">{t('meds_soil_status')}</h3>
+                                <p className={cn("font-medium italic", isNone ? "text-muted-foreground" : "text-white/70")}>{t('meds_soil_desc')}</p>
+                            </div>
+                        </div>
+                        {streak > 0 && (
+                            <div className={cn(
+                                "px-5 py-2 rounded-2xl flex items-center gap-2 shadow-lg animate-in zoom-in-95",
+                                isSoccer ? "bg-blue-500 text-white" : (isNone ? "bg-primary text-white" : "bg-amber-400 text-black")
+                            )}>
+                                <Flame className="h-5 w-5 animate-pulse" />
+                                <span className="font-black text-sm uppercase tracking-widest">
+                                    {t('meds_streak_label').replace('{streak}', streak.toString())}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-end px-1">
+                            <span className={cn("text-[10px] font-black uppercase tracking-[0.2em]", isNone ? "text-muted-foreground" : "text-white/60")}>{t('meds_fertility')}</span>
+                            <span className={cn("text-xl font-black font-headline", isSoccer ? "text-sky-400" : (isNone ? "text-primary" : "text-emerald-400"))}>{Math.round(fertility)}%</span>
+                        </div>
+                        <div className={cn("h-4 w-full rounded-full overflow-hidden border shadow-inner", isNone ? "bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700" : "bg-black/20 border-white/10")}>
+                            <div 
+                                className={cn(
+                                    "h-full transition-all duration-1000 ease-out",
+                                    isSoccer ? "bg-gradient-to-r from-blue-600 to-sky-400" : (isNone ? "bg-primary" : "bg-gradient-to-r from-emerald-600 to-emerald-400")
+                                )} 
+                                style={{ width: `${fertility}%` }} 
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className={cn("relative w-full md:w-64 h-32 rounded-[2rem] border-2 shadow-inner flex items-end justify-around p-4", isNone ? "bg-white/50 dark:bg-slate-900/50 border-primary/5" : "bg-black/30 border-white/10")}>
+                    <div className="absolute inset-0 flex items-center justify-center opacity-5">
+                        {isSoccer ? <Trophy className="w-24 h-24" /> : (isNone ? <ClipboardList className="w-24 h-24" /> : <Leaf className="w-24 h-24" />)}
+                    </div>
+                    {mounted && Array.from({ length: numIcons }).map((_, i) => (
+                        <div key={i} className="animate-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: `${i * 150}ms` }}>
+                            {isSoccer ? (
+                                <Trophy className={cn(
+                                    "text-amber-400 transition-all drop-shadow-lg",
+                                    i % 2 === 0 ? "h-10 w-10 rotate-[-10deg]" : "h-14 w-14 rotate-[5deg]"
+                                )} />
+                            ) : (isNone ? (
+                                <CheckCircle2 className={cn(
+                                    "text-primary transition-all",
+                                    i % 2 === 0 ? "h-10 w-10 rotate-[-10deg]" : "h-14 w-14 rotate-[5deg]"
+                                )} />
+                            ) : (
+                                <Sprout className={cn(
+                                    "text-emerald-400 transition-all",
+                                    i % 2 === 0 ? "h-10 w-10 rotate-[-10deg]" : "h-14 w-14 rotate-[5deg]"
+                                )} />
+                            ))}
+                        </div>
+                    ))}
+                    {mounted && numIcons === 0 && (
+                        <div className={cn("italic text-xs font-bold uppercase tracking-widest text-center w-full pb-8", isNone ? "text-muted-foreground/40" : "text-white/20")}>
+                            {isSoccer ? 'Start de training...' : (isNone ? 'Wacht op registratie...' : 'Wacht op voeding...')}
+                        </div>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+export default function MedicationsPage() {
+    const { user, updateUserProfile } = useAuth();
+    const { toast } = useToast();
+    const { t, language, metaphor } = useLanguage();
+    const [mounted, setMounted] = useState(false);
+    const [medications, setMedications] = useState<Medication[]>([]);
+    const [logs, setLogs] = useState<MedicationLog[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isAdding, setIsAdding] = useState(false);
+    
+    const [name, setName] = useState("");
+    const [dosage, setDosage] = useState("");
+    const [frequency, setFrequency] = useState<Medication['frequency']>("daily");
+    const [time, setTime] = useState("08:00");
+    const [medType, setMedType] = useState<MedicationType>("pill");
+
+    const [selectedDayLogs, setSelectedDayLogs] = useState<MedicationLog[]>([]);
+    const [selectedDayDate, setSelectedDayDate] = useState<Date | null>(null);
+    const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+
+    const medicationTypes: { value: MedicationType; labelKey: any; icon: any }[] = [
+        { value: 'pill', labelKey: 'meds_type_pill', icon: Pill },
+        { value: 'capsule', labelKey: 'meds_type_capsule', icon: CircleDot },
+        { value: 'liquid', labelKey: 'meds_type_liquid', icon: Droplets },
+        { value: 'injection', labelKey: 'meds_type_injection', icon: Syringe },
+        { value: 'cream', labelKey: 'meds_type_cream', icon: Sparkles },
+        { value: 'inhaler', labelKey: 'meds_type_inhaler', icon: Wind },
+    ];
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!user || !user.emailVerified || !mounted) {
+            if (mounted && user && !user.emailVerified) setLoading(false);
+            return;
+        }
+
+        const medsRef = collection(db, "users", user.uid, "medications");
+        const qMeds = query(medsRef);
+        const unsubMeds = onSnapshot(qMeds, (snapshot) => {
+            setMedications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Medication)));
+            setLoading(false);
+        }, (error) => {
+            console.error("Meds listener error:", error);
+            setLoading(false);
+        });
+
+        // Legacy Fallback: Listen to both 'medicationStatements' (FHIR) and 'medicationLogs' (Legacy)
+        const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
+        const msRef = collection(db, "users", user.uid, "medicationStatements");
+        const legacyLogsRef = collection(db, "users", user.uid, "medicationLogs");
+        
+        const updateLogs = (snapshot: any) => {
+            const newLogs = snapshot.docs.map((doc: any) => ({
+                id: doc.id,
+                ...doc.data(),
+                effectiveDateTime: doc.data().effectiveDateTime?.toDate() || doc.data().timestamp?.toDate() || new Date()
+            } as MedicationLog));
+
+            setLogs(prev => {
+                const combined = [...newLogs, ...prev.filter(p => !newLogs.some(n => n.id === p.id))];
+                return combined.sort((a, b) => {
+                    const dateA = a.effectiveDateTime instanceof Date ? a.effectiveDateTime : new Date(0);
+                    const dateB = b.effectiveDateTime instanceof Date ? b.effectiveDateTime : new Date(0);
+                    return dateB.getTime() - dateA.getTime();
+                });
+            });
+        };
+
+        const unsubMs = onSnapshot(query(msRef, where("effectiveDateTime", ">=", sevenDaysAgo)), updateLogs);
+        const unsubLegacy = onSnapshot(query(legacyLogsRef, where("timestamp", ">=", sevenDaysAgo)), updateLogs);
+
+        return () => {
+            unsubMeds();
+            unsubMs();
+            unsubLegacy();
+        };
+    }, [user, user?.emailVerified, mounted]);
+
+    const chartData = useMemo(() => {
+        if (!mounted) return [];
+        
+        const last7Days = eachDayOfInterval({
+            start: subDays(startOfDay(new Date()), 6),
+            end: startOfDay(new Date())
+        });
+
+        return last7Days.map(day => {
+            const count = logs.filter(log => {
+                const logDate = log.effectiveDateTime instanceof Date ? log.effectiveDateTime : (log.effectiveDateTime?.toDate?.() || log.timestamp?.toDate?.() || new Date());
+                return isSameDay(startOfDay(logDate), day);
+            }).length;
+
+            return {
+                name: format(day, 'EEE', { locale: language === 'en' ? undefined : (language === 'papiamento' ? undefined : nl) }),
+                count,
+                date: day
+            };
+        });
+    }, [logs, mounted, language]);
+
+    const handleBarClick = (data: any) => {
+        if (!data || !data.date) return;
+        
+        const clickedDate = data.date;
+        const dayLogs = logs.filter(log => {
+            const logDate = log.effectiveDateTime instanceof Date ? log.effectiveDateTime : (log.effectiveDateTime?.toDate?.() || log.timestamp?.toDate?.() || new Date());
+            return isSameDay(startOfDay(logDate), startOfDay(clickedDate));
+        });
+
+        setSelectedDayDate(clickedDate);
+        setSelectedDayLogs(dayLogs);
+        setIsDetailsDialogOpen(true);
+    };
+
+    const handleAddMedication = () => {
+        if (!user || !name || !dosage) return;
+
+        const medsRef = collection(db, "users", user.uid, "medications");
+        const newMed = {
+            name,
+            dosage,
+            frequency,
+            times: [time],
+            startDate: format(new Date(), "yyyy-MM-dd"),
+            active: true,
+            medicationType: medType
+        };
+
+        addDoc(medsRef, newMed).then(() => {
+            toast({ title: t('meds_add_title'), description: `${name} ${t('meds_plan_desc')}` });
+            setIsAdding(false);
+            setName("");
+            setDosage("");
+            setMedType("pill");
+        }).catch(err => {
+            const permissionError = new FirestorePermissionError({
+                path: medsRef.path,
+                operation: 'create',
+                requestResourceData: newMed
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        });
+    };
+
+    const handleDeleteMedication = (id: string) => {
+        if (!user) return;
+        const medRef = doc(db, "users", user.uid, "medications", id);
+        deleteDoc(medRef).catch(err => {
+            const permissionError = new FirestorePermissionError({
+                path: medRef.path,
+                operation: 'delete'
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        });
+    };
+
+    const handleLogDose = (med: Medication) => {
+        if (!user) return;
+
+        if (typeof window !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(50);
+        }
+
+        const logsRef = collection(db, "users", user.uid, "medicationStatements");
+        const fhirStatement = {
+            resourceType: 'MedicationStatement',
+            status: 'completed',
+            medicationId: med.id,
+            medicationName: med.name,
+            medicationType: med.medicationType || 'pill',
+            effectiveDateTime: serverTimestamp(),
+            subject: `Patient/${user.uid}`
+        };
+
+        addDoc(logsRef, fhirStatement).then(() => {
+            toast({ 
+                title: t('meds_feed_soil'), 
+                description: `${t('meds_thanks')} ${med.name}` 
+            });
+            if (updateUserProfile && user.points !== undefined) {
+                updateUserProfile({ points: user.points + 5 });
+            }
+        }).catch(err => {
+            const permissionError = new FirestorePermissionError({
+                path: logsRef.path,
+                operation: 'create',
+                requestResourceData: fhirStatement
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        });
+    };
+
+    const MedicationPictogram = ({ type, className }: { type?: MedicationType; className?: string }) => {
+        const found = medicationTypes.find(t => t.value === type);
+        const Icon = found?.icon || Pill;
+        return <Icon className={className} />;
+    };
+
+    if (!mounted) {
+        return <div className="flex h-screen items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
+    }
+
+    const isSoccer = metaphor === 'soccer';
+    const isNone = metaphor === 'none';
+
+    const graphColor = isSoccer ? "hsl(var(--primary))" : (isNone ? "hsl(var(--primary))" : "hsl(142, 71%, 45%)");
+
+    return (
+        <div className="space-y-8 max-w-6xl mx-auto animate-in fade-in duration-1000 pb-20">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 px-2">
+                <div className="space-y-1">
+                    <h1 className="text-4xl font-black font-headline text-primary">{t('meds_title')}</h1>
+                    <p className="text-xl text-muted-foreground font-medium italic">{t('meds_subtitle')}</p>
+                </div>
+                <Dialog open={isAdding} onOpenChange={setIsAdding}>
+                    <DialogTrigger asChild>
+                        <Button size="lg" className="w-full sm:w-auto shadow-lg active:scale-95 transition-all rounded-2xl h-14">
+                            <PlusCircle className="mr-2 h-5 w-5" />{t('meds_add_btn')}
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md rounded-[2.5rem] border-4 border-white/80 dark:border-slate-800/50 shadow-2xl bg-white dark:bg-slate-900 overflow-hidden">
+                        <DialogHeader>
+                            <DialogTitle className="text-3xl font-black font-headline text-primary">{t('meds_add_title')}</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-2 no-scrollbar">
+                            <div className="space-y-3">
+                                <Label className="text-base font-bold px-1">{t('meds_field_type')}</Label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {medicationTypes.map((mt) => (
+                                        <button
+                                            key={mt.value}
+                                            onClick={() => setMedType(mt.value)}
+                                            className={cn(
+                                                "flex items-center gap-3 p-4 rounded-2xl border-2 transition-all active:scale-95 text-left",
+                                                medType === mt.value 
+                                                    ? "border-primary bg-primary/10 text-primary shadow-inner dark:bg-primary/20" 
+                                                    : "border-primary/10 bg-white/80 dark:bg-slate-900/40 dark:border-slate-800 hover:border-primary/30"
+                                            )}
+                                        >
+                                            <mt.icon className="h-6 w-6 shrink-0" />
+                                            <span className="text-xs font-black uppercase tracking-tighter leading-tight">{t(mt.labelKey)}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="name" className="text-base font-bold px-1">{t('meds_field_name')}</Label>
+                                <Input 
+                                    id="name" 
+                                    value={name} 
+                                    onChange={(e) => setName(e.target.value)} 
+                                    placeholder={language === 'en' ? 'e.g. Vitamins' : 'Bijv. Vitamines'}
+                                    autoComplete="off"
+                                    className="h-14 rounded-2xl border-2 border-primary/10 focus:border-primary/30 bg-white dark:bg-slate-950/40 shadow-inner"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="dosage" className="text-base font-bold px-1">{t('meds_field_dosage')}</Label>
+                                <Input 
+                                    id="dosage" 
+                                    value={dosage} 
+                                    onChange={(e) => setDosage(e.target.value)} 
+                                    placeholder={language === 'en' ? 'e.g. 1 tablet' : 'Bijv. 1 tablet'} 
+                                    autoComplete="off"
+                                    className="h-14 rounded-2xl border-2 border-primary/10 focus:border-primary/30 bg-white dark:bg-slate-950/40 shadow-inner"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="frequency" className="text-base font-bold px-1">{t('meds_field_frequency')}</Label>
+                                    <Select value={frequency} onValueChange={(v: any) => setFrequency(v)}>
+                                        <SelectTrigger className="h-14 rounded-2xl border-2 border-primary/10 bg-white dark:bg-slate-950/40">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-2xl border-2 bg-white dark:bg-slate-900">
+                                            <SelectItem value="daily">{t('meds_freq_daily')}</SelectItem>
+                                            <SelectItem value="weekly">{t('meds_freq_weekly')}</SelectItem>
+                                            <SelectItem value="as_needed">{t('meds_freq_needed')}</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="time" className="text-base font-bold px-1">{t('meds_field_time')}</Label>
+                                    <Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-14 rounded-2xl border-2 border-primary/10 bg-white dark:bg-slate-950/40 shadow-inner" />
+                                </div>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button onClick={handleAddMedication} size="lg" className="w-full rounded-[2rem] shadow-2xl h-16 text-xl font-headline bg-primary border-b-4 border-primary-foreground/20">
+                                {isSoccer ? <Zap className="mr-2 h-6 w-6 text-amber-400" /> : (isNone ? <Pill className="mr-2 h-6 w-6 text-amber-400" /> : <Sprout className="mr-2 h-6 w-6 text-amber-400" />)} {t('calendar_btn_save')}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div>
+
+            <div className="grid gap-8 grid-cols-1 lg:grid-cols-2">
+                <ResourceStatus logs={logs} mounted={mounted} />
+
+                <Card className="flex flex-col border-primary/10 hover-lift rounded-[2.5rem] shadow-xl overflow-hidden bg-gradient-to-br from-card to-primary/5 dark:from-slate-900/80 dark:to-primary/10">
+                    <CardHeader className="pt-8 px-8">
+                        <CardTitle className="flex items-center gap-3 font-headline text-2xl">
+                            <div className="p-3 rounded-2xl bg-primary/10 text-primary shadow-inner dark:bg-primary/20">
+                                {isSoccer ? <Target className="h-7 w-7" /> : (isNone ? <ClipboardList className="h-7 w-7" /> : <Sprout className="h-7 w-7" />)}
+                            </div>
+                            {t('meds_plan_title')}
+                        </CardTitle>
+                        <CardDescription className="text-lg font-medium">{t('meds_plan_desc')}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4 px-8 pb-10">
+                        {loading ? (
+                            <div className="space-y-3">
+                                <Skeleton className="h-24 w-full rounded-2xl" />
+                                <Skeleton className="h-24 w-full rounded-2xl" />
+                            </div>
+                        ) : medications.length === 0 ? (
+                            <div className="text-center py-20 px-4 border-4 border-dashed border-white/60 dark:border-slate-800 rounded-[2rem] bg-muted/5 opacity-60">
+                                {isSoccer ? <Target className="h-20 w-20 text-muted-foreground mx-auto mb-6 opacity-20" /> : (isNone ? <ClipboardList className="h-20 w-20 text-muted-foreground mx-auto mb-6 opacity-20" /> : <Sprout className="h-20 w-20 text-muted-foreground mx-auto mb-6 opacity-20" />)}
+                                <p className="text-lg font-medium italic text-muted-foreground">"{t('meds_empty')}"</p>
+                            </div>
+                        ) : (
+                            medications.map(med => (
+                                <div key={med.id} className="flex items-center justify-between p-5 rounded-[2rem] border-4 border-white/60 dark:border-white/5 bg-white/40 dark:bg-slate-900/40 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all duration-500 group relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:rotate-12 transition-transform">
+                                        <MedicationPictogram type={med.medicationType} className="h-16 w-16" />
+                                    </div>
+                                    <div className="flex items-center gap-5 relative z-10">
+                                        <div className="bg-primary/5 p-4 rounded-2xl border border-primary/5 shadow-inner dark:bg-primary/10 dark:border-primary/10">
+                                            <MedicationPictogram type={med.medicationType} className="h-9 w-9 text-primary" />
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-xl leading-tight font-headline">{med.name}</p>
+                                            <p className="text-base text-muted-foreground font-medium italic">{med.dosage}</p>
+                                            <div className="flex items-center gap-2 mt-2 text-[10px] font-black text-primary bg-primary/10 px-3 py-1.5 rounded-full w-fit uppercase tracking-widest shadow-sm dark:bg-primary/20">
+                                                <Clock className="h-3.5 w-3.5" />
+                                                {med.times?.join(", ") || "08:00"} uur
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 relative z-10">
+                                        <button 
+                                            onClick={() => handleLogDose(med)} 
+                                            className={cn(
+                                                "h-16 w-16 rounded-[1.5rem] text-white flex items-center justify-center shadow-lg active:scale-90 transition-all border-b-4",
+                                                isSoccer ? "bg-blue-500 hover:bg-blue-600 border-blue-700" : (isNone ? "bg-primary hover:bg-primary/90 border-primary-foreground/20" : "bg-emerald-500 hover:bg-emerald-600 border-emerald-700")
+                                            )} 
+                                            title={t('meds_feed_soil')}
+                                        >
+                                            {isSoccer ? <Zap className="h-10 w-10 animate-pulse" /> : (isNone ? <Check className="h-10 w-10 animate-pulse" /> : <Droplets className="h-10 w-10 animate-pulse" />)}
+                                        </button>
+                                        <Button size="icon" variant="ghost" className="h-12 w-12 rounded-xl text-destructive hover:bg-destructive/10" onClick={() => handleDeleteMedication(med.id)} title={t('chat_delete_yes')}>
+                                            <Trash2 className="h-5 w-5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="flex flex-col border-primary/10 hover-lift rounded-[2.5rem] shadow-xl overflow-hidden bg-gradient-to-br from-slate-50 to-emerald-50/20 dark:from-slate-900 dark:to-emerald-950/10">
+                    <CardHeader className="pt-8 px-8">
+                        <CardTitle className="flex items-center gap-3 font-headline text-2xl">
+                            <div className="p-3 rounded-2xl bg-primary/10 text-primary shadow-inner dark:bg-primary/20">
+                                {isSoccer ? <Trophy className="h-7 w-7" /> : (isNone ? <History className="h-7 w-7" /> : <Sprout className="h-7 w-7" />)}
+                            </div>
+                            {t('meds_history_title')} (7 {language === 'en' ? 'days' : 'daag'})
+                        </CardTitle>
+                        <CardDescription className="text-lg font-medium">{t('meds_history_desc')}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="px-8 pb-10">
+                        {logs.length === 0 ? (
+                            <div className="text-center py-20 opacity-40">
+                                <Wind className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                                <p className="text-lg font-medium italic text-muted-foreground">{t('meds_history_empty')}</p>
+                            </div>
+                        ) : (
+                            <div className="h-[280px] w-full bg-white/40 dark:bg-slate-900/40 p-6 rounded-[2rem] border-2 border-white/60 dark:border-white/5 shadow-inner">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={chartData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.1)" />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            fontSize={12} 
+                                            tickMargin={10} 
+                                            axisLine={false}
+                                            tickLine={false}
+                                        />
+                                        <YAxis 
+                                            allowDecimals={false}
+                                            fontSize={12} 
+                                            axisLine={false} 
+                                            tickLine={false}
+                                        />
+                                        <Tooltip 
+                                            cursor={{ fill: 'transparent' }}
+                                            content={null}
+                                        />
+                                        <Bar 
+                                            dataKey="count" 
+                                            radius={[10, 10, 0, 0]}
+                                            onClick={handleBarClick}
+                                            className="cursor-pointer"
+                                        >
+                                            {chartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={graphColor} fillOpacity={0.6 + (index * 0.05)} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+                        <div className="mt-6 flex justify-center">
+                            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground/40 italic">
+                                {isSoccer ? "Trainingsintensiteit van de aafgeloupe week" : (isNone ? "Activiteit van de afgelopen 7 dagen" : "Gezondheidsvoeding van de aafgeloupe week")}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+                <DialogContent className="max-w-md rounded-[2.5rem] border-4 border-white/80 dark:border-slate-800/50 shadow-2xl bg-white dark:bg-slate-900 p-0 overflow-hidden">
+                    <DialogHeader className="p-8 bg-primary/5 border-b border-primary/5">
+                        <DialogTitle className="text-2xl font-black font-headline text-primary flex items-center gap-3">
+                            <div className="bg-white dark:bg-slate-900 p-2 rounded-xl shadow-inner">
+                                <History className="h-6 w-6" />
+                            </div>
+                            {selectedDayDate && t('meds_history_details_title').replace('{date}', format(selectedDayDate, 'd MMMM', { locale: language === 'en' ? undefined : (language === 'papiamento' ? undefined : nl) }))}
+                        </DialogTitle>
+                        <DialogDescription className="text-base italic font-medium">
+                            Overzicht van innames op deze dag.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <ScrollArea className="max-h-[50vh] p-8">
+                        {selectedDayLogs.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center opacity-40">
+                                <Wind className="h-12 w-12 mb-4" />
+                                <p className="text-lg font-medium italic">{t('meds_history_details_empty')}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {selectedDayLogs.map((log) => (
+                                    <div key={log.id} className="flex items-center justify-between p-4 rounded-2xl border-2 border-primary/5 bg-white/40 dark:bg-slate-950/40 shadow-sm">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-primary/5 rounded-xl">
+                                                <MedicationPictogram type={log.medicationType} className="h-6 w-6 text-primary" />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-lg leading-tight">{log.medicationName}</p>
+                                                <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    {t('meds_history_details_taken')} {format(log.effectiveDateTime, 'HH:mm')} uur
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-emerald-100 text-emerald-700 p-1.5 rounded-full">
+                                            <Check className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </ScrollArea>
+
+                    <DialogFooter className="p-6 bg-primary/5 border-t">
+                        <DialogClose asChild>
+                            <Button className="w-full rounded-xl h-12 font-bold shadow-md">
+                                {t('common_close')}
+                            </Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
